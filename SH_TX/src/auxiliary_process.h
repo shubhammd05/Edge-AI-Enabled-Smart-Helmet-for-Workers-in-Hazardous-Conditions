@@ -1,10 +1,10 @@
-#include <preprocessing.cpp>
+#include <preprocessing_rf.cpp>
 #include <Arduino.h>
-#include <svm_model.h>
+#include <RandomForestModel.h>
 #include <definitions.h>
 // Instantiate the objects
 FallPreprocessor preprocessor;
-Eloquent::ML::Port::SVM svm; // Your ported model header
+Eloquent::ML::Port::RandomForest svm; // Your ported model header
 
 // Counter for the 50-observation "Delta"
 int observationDelta = 0;
@@ -49,7 +49,7 @@ void HelloWorld(float x, float y,float z) {
                 // Handle the output
                 if (result == 1) {
                     // Trigger Buzzer/Override sequence
-                    Serial.print("FALL_____________________________");
+                    Serial.println("FALL_____________________________");
                     digitalWrite(BUZZER_PIN, HIGH);
                     delay(500);
                     digitalWrite(BUZZER_PIN, LOW);
