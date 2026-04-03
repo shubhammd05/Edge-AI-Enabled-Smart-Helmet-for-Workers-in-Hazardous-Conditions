@@ -7,7 +7,7 @@
 
 #define BUTTON_PIN 13
 #define SS 5
-#define RST 4
+//#define RST 4
 #define DIO0 26
 
 
@@ -20,7 +20,7 @@ const int unitsPerG = zOneG - xZeroG; // ~405 units = 9.8 m/s^2
 
 
 void IRAM_ATTR handleButtonInterrupt() {
-  delay(500);
+  vTaskDelay(pdMS_TO_TICKS(500));
    if(danger == 0){
     danger = 4;
    }
@@ -76,7 +76,8 @@ void vLoRaCommunicationTask(void *pvParameters) {
       LoRa.beginPacket();
       LoRa.print(String(danger));
       LoRa.endPacket();
-
+      Serial.println("Sent distress signal");
+      danger = 0;
       vTaskDelay(pdMS_TO_TICKS(2000)); // Non-blocking delay
 
        
@@ -135,7 +136,7 @@ void vAccelerometerTask(void *pvParameters) {
         Serial.printf("%.6f\t%.6f\t%.6f\n", accX, accY, accZ);
 
         // 4. Run Fall Detection Logic (TinyML/SVM)
-        HelloWorld(accX, accY, accZ);
+        HelloWorld(accZ, accY, accX);
 
         // 5. Precise Timing: 40ms delay = 25Hz
         // If your model needs the full 50Hz/100Hz from the Xsens kit, 
@@ -164,15 +165,15 @@ void vAccelerometerTask(void *pvParameters) {
     Serial.println("LoRa Transmitter Initialized.");
 
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
-    xTaskCreatePinnedToCore(
-    vGasMonitoringTask,   // Function to run
-    "GasTask",            // Name
-    4096,                 // Stack size (Increased to prevent crash)
-    NULL,                 // Parameter
-    1,                    // Priority
-    NULL,                 // Task handle
-    1                     // Core 1
-  );
+  //   xTaskCreatePinnedToCore(
+  //   vGasMonitoringTask,   // Function to run
+  //   "GasTask",            // Name
+  //   4096,                 // Stack size (Increased to prevent crash)
+  //   NULL,                 // Parameter
+  //   1,                    // Priority
+  //   NULL,                 // Task handle
+  //   1                     // Core 1
+  // );
 
   xTaskCreatePinnedToCore(
     vLoRaCommunicationTask, // Task function
@@ -181,28 +182,28 @@ void vAccelerometerTask(void *pvParameters) {
     NULL,                   // Parameter
     2,                      // Priority (Higher than Gas monitor if alerts are critical)
     &LoRaTaskHandle,        // Handle
-    1                       // Pin to Core 0 (Radio tasks usually sit on Core 0)
+    0                       // Pin to Core 0 (Radio tasks usually sit on Core 0)
   );
 
-  xTaskCreatePinnedToCore(
-        vAccelerometerTask,   // Task function
-        "FallDetection",      // Task Name
-        8192,                 // Stack Size in Bytes (8KB)
-        NULL,                 // Task input parameter
-        3,                    // Priority (Higher priority for safety events)
-        &AccelTaskHandle,     // Task handle
-        0                     // Pin to Core 1 (Application Core)
-    );
+  // xTaskCreatePinnedToCore(
+  //       vAccelerometerTask,   // Task function
+  //       "FallDetection",      // Task Name
+  //       8192*4,                 // Stack Size in Bytes (8KB)
+  //       NULL,                 // Task input parameter
+  //       3,                    // Priority (Higher priority for safety events)
+  //       &AccelTaskHandle,     // Task handle
+  //       0                     // Pin to Core 1 (Application Core)
+  //   );
 
-    xTaskCreatePinnedToCore(
-        vTemperatureTask,
-        "TempMonitor",
-        4096,
-        NULL,
-        2,             // Priority 2 (Mid-level priority)
-        &TempTaskHandle,
-        1              // Core 1 (Sensor Core)
-    );
+    // xTaskCreatePinnedToCore(
+    //     vTemperatureTask,
+    //     "TempMonitor",
+    //     4096,
+    //     NULL,
+    //     2,             // Priority 2 (Mid-level priority)
+    //     &TempTaskHandle,
+    //     1              // Core 1 (Sensor Core)
+    // );
 
 }
   

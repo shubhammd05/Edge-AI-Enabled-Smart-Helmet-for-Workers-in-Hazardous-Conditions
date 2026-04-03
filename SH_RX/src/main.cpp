@@ -7,10 +7,28 @@
 #include <DNSServer.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
-const byte BUTTON_PIN = 14; // D5 is GPIO 14
+const byte BUTTON_PIN = 0; // D5 is GPIO 14
 const byte DNS_PORT = 53;
 unsigned long portalTimer = 0;
 const unsigned long TIMEOUT_MS = 300000; 
+
+#define LED_PIN 5   // D1
+
+#define SS   15     // D8
+#define RST  2      // D4
+#define DIO0 16     // D0
+
+volatile bool APon = false;
+
+// const char* ssid = "GalaxyA16";
+// const char* password = "12345678";
+const char* apiKey = "cd_shu_060326_p1xCZq";
+
+
+const char* templateID = "103";                  // Template ID //moreinfo: https://circuitdigest.com/article free-sms-api-for-arduino-esp32-esp8266-nodemcu-raspberry-pi
+const char* mobileNumber = "+919130788018";       // Mobile number (with country code)
+const char* var1 = "Helmet Sensor";            // Variable 1
+const char* var2 = "helmet of employee xyz"; 
 
 volatile bool triggerPortal = false;
 bool portalActive = false;
@@ -26,7 +44,7 @@ DNSServer dnsServer;
 void loadWifiAndConnect();
 void startPortal();
 void handleSave();
-
+void LoRaTask();
 // Interrupt Service Routine
 void IRAM_ATTR handleButtonPress() {
   triggerPortal = true;
@@ -42,6 +60,33 @@ void setup() {
   }
   
   loadWifiAndConnect();
+
+//   WiFi.begin(ssid, password);
+
+
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  SPI.begin();
+
+  LoRa.setPins(SS, RST, DIO0);
+
+  if (!LoRa.begin(433E6)) {
+    Serial.println("LoRa initialization failed!");
+    while (1);
+
+    
+  }
+
+  Serial.println("LoRa Receiver Initialized");
+
+//   Serial.print("Connecting to WiFi");
+//   while (WiFi.status() != WL_CONNECTED) {
+//     delay(500);
+//     Serial.print(".");
+//   }
+//   Serial.println("\nConnected!");
+
 }
 
 void loop() {
@@ -61,6 +106,8 @@ void loop() {
         ESP.restart(); 
     }
   }
+
+  LoRaTask();
 }
 
 // --- Function Definitions ---
@@ -119,117 +166,61 @@ void handleSave() {
   delay(2000);
   ESP.restart();
 }
-// #define LED_PIN 5   // D1
-
-// #define SS   15     // D8
-// #define RST  2      // D4
-// #define DIO0 16     // D0
-
-// volatile bool APon = false;
-
-// const char* ssid = "GalaxyA16";
-// const char* password = "12345678";
-// const char* apiKey = "cd_shu_060326_p1xCZq";
 
 
-// const char* templateID = "103";                  // Template ID //moreinfo: https://circuitdigest.com/article free-sms-api-for-arduino-esp32-esp8266-nodemcu-raspberry-pi
-// const char* mobileNumber = "9130788018";       // Mobile number (with country code)
-// const char* var1 = "Helmet Sensor";            // Variable 1
-// const char* var2 = "helmet of employee xyz"; 
+void sendSMS() {
+ if (WiFi.status() == WL_CONNECTED) {
+   WiFiClientSecure client; // Use WiFiClientSecure for HTTPS connections
+   client.setInsecure();    // Skip certificate validation (not secure but works for development)
+   HTTPClient http;
+   // Build the API URL with the template ID
+   String apiUrl = "https://www.circuitdigest.cloud/api/v1/send_sms?ID=" + String(templateID);
+   // Start the HTTPS connection with WiFiClientSecure
+   http.begin(client, apiUrl);
+   http.addHeader("Authorization", apiKey);
+   http.addHeader("Content-Type", "application/json");
+   // Create the JSON payload with SMS details
+   String payload = "{\"mobiles\":\"" + String(mobileNumber) + "\",\"var1\":\"" + String(var1) + "\",\"var2\":\"" + String(var2) + "\"}";
+   // Send POST request
+   int httpResponseCode = http.POST(payload);
+   // Check response
+   if (httpResponseCode == 200) {
+     Serial.println("SMS sent successfully!");
+     Serial.println(http.getString());
+   } else {
+     Serial.print("Failed to send SMS. Error code: ");
+     Serial.println(httpResponseCode);
+     Serial.println("Response: " + http.getString());
+   }
+   http.end(); // End connection
+ } else {
+   Serial.println("WiFi not connected!");
+ }
+}void LoRaTask() {
 
-// void sendSMS() {
+  int packetSize = LoRa.parsePacket();
 
-//   if (WiFi.status() == WL_CONNECTED) {
+  if (packetSize) {
 
-//     WiFiClientSecure client;
-//     client.setInsecure();
+    Serial.print("Packet received. Size: ");
+    Serial.println(packetSize);
 
-//     HTTPClient http;
+    String receivedData = "";
 
-//     String url = "https://www.circuitdigest.cloud/send_sms?";
-//     url += "ID=" + String(templateID);
-//     url += "&mobiles=" + String(mobileNumber);
-//     url += "&var1=" + String(var1);
-//     url += "&var2=" + String(var2);
+    while (LoRa.available()) {
+      receivedData += (char)LoRa.read();
+    }
 
-//     Serial.println("Request URL:");
-//     Serial.println(url);
+    Serial.print("Message: ");
+    Serial.println(receivedData);
 
-//     http.begin(client, url);
-//     http.addHeader("Authorization", "Bearer " + String(apiKey));
+    if (receivedData != "0") {
+      digitalWrite(LED_PIN, HIGH);
+      sendSMS();
+      delay(200);
+      digitalWrite(LED_PIN, LOW);
+    }
 
-//     int httpResponseCode = http.GET();
-
-//     Serial.print("Response Code: ");
-//     Serial.println(httpResponseCode);
-
-//     String response = http.getString();
-//     Serial.println(response);
-
-//     http.end();
-//   }
-//   else {
-//     Serial.println("WiFi not connected!");
-//   }
-// }
-// void setup() {
-
-//   Serial.begin(9600);
-//   WiFi.begin(ssid, password);
-
-
-//   pinMode(LED_PIN, OUTPUT);
-//   digitalWrite(LED_PIN, LOW);
-
-//   SPI.begin();
-
-//   LoRa.setPins(SS, RST, DIO0);
-
-//   if (!LoRa.begin(433E6)) {
-//     Serial.println("LoRa initialization failed!");
-//     while (1);
-
-    
-//   }
-
-//   Serial.println("LoRa Receiver Initialized");
-
-//   Serial.print("Connecting to WiFi");
-//   while (WiFi.status() != WL_CONNECTED) {
-//     delay(500);
-//     Serial.print(".");
-//   }
-//   Serial.println("\nConnected!");
-
-  
-// }
-
-// void loop() {
-
-//   int packetSize = LoRa.parsePacket();
-
-//   if (packetSize) {
-
-//     Serial.print("Packet received. Size: ");
-//     Serial.println(packetSize);
-
-//     String receivedData = "";
-
-//     while (LoRa.available()) {
-//       receivedData += (char)LoRa.read();
-//     }
-
-//     Serial.print("Message: ");
-//     Serial.println(receivedData);
-
-//     if (receivedData == "LED_ON") {
-//       digitalWrite(LED_PIN, HIGH);
-//       sendSMS();
-//       delay(200);
-//     }
-
-//     if (receivedData == "LED_OFF") {
-//       digitalWrite(LED_PIN, LOW);
-//     }
-//   }
-// }
+   
+  }
+}
